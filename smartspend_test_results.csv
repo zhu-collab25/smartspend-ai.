@@ -1,0 +1,21 @@
+Description,Actual Category,Predicted Category,Correct
+Iced cappuccino,Food & Drinks,Food & Drinks,True
+Pizza restaurant,Food & Drinks,Food & Drinks,True
+Bubble tea shop,Food & Drinks,Food & Drinks,True
+Burger lunch,Food & Drinks,Food & Drinks,True
+Taxi ride,Transportation,Transportation,True
+Bus ticket,Transportation,Transportation,True
+Train fare,Transportation,Transportation,True
+Parking fee,Transportation,Transportation,True
+New handbag,Shopping,Shopping,True
+Winter jacket,Shopping,Shopping,True
+Running shoes,Shopping,Shopping,True
+Phone case,Shopping,Shopping,True
+Movie ticket,Entertainment,Entertainment,True
+Karaoke session,Entertainment,Entertainment,True
+Gaming subscription,Entertainment,Entertainment,True
+Concert ticket,Entertainment,Entertainment,True
+Fresh vegetables,Groceries,Groceries,True
+Rice and cooking oil,Groceries,Groceries,True
+Milk and eggs,Groceries,Groceries,True
+Supermarket shopping,Groceries,Groceries,True
