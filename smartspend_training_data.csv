@@ -199,3 +199,83 @@ petrol for bike,7.34,Transportation
 ice cream dessert,21.63,Food & Drinks
 scooter rental,31.99,Transportation
 coffee at Starbucks,20.38,Food & Drinks
+monthly apartment rent,25.00,Housing
+house rental payment,25.00,Housing
+mortgage home payment,25.00,Housing
+room rent landlord,25.00,Housing
+apartment maintenance fee,25.00,Housing
+housing association dues,25.00,Housing
+property tax payment,25.00,Housing
+home repair plumbing,25.00,Housing
+roof repair service,25.00,Housing
+rental deposit,25.00,Housing
+electricity bill,25.00,Utilities
+water utility bill,25.00,Utilities
+gas utility payment,25.00,Utilities
+internet broadband bill,25.00,Utilities
+mobile phone bill,25.00,Utilities
+sewage utility charge,25.00,Utilities
+household power bill,25.00,Utilities
+trash collection fee,25.00,Utilities
+home heating bill,25.00,Utilities
+wifi service payment,25.00,Utilities
+doctor consultation,25.00,Healthcare
+hospital treatment,25.00,Healthcare
+pharmacy medicine,25.00,Healthcare
+dental checkup,25.00,Healthcare
+medical clinic visit,25.00,Healthcare
+prescription medication,25.00,Healthcare
+eye examination,25.00,Healthcare
+physiotherapy appointment,25.00,Healthcare
+blood test lab,25.00,Healthcare
+vaccination appointment,25.00,Healthcare
+university tuition,25.00,Education
+school fees,25.00,Education
+textbook purchase,25.00,Education
+online course enrollment,25.00,Education
+language class tuition,25.00,Education
+exam registration fee,25.00,Education
+private tutoring lesson,25.00,Education
+college course payment,25.00,Education
+school supplies stationery,25.00,Education
+professional training workshop,25.00,Education
+health insurance premium,25.00,Insurance
+car insurance renewal,25.00,Insurance
+life insurance payment,25.00,Insurance
+home insurance policy,25.00,Insurance
+travel insurance premium,25.00,Insurance
+motorbike insurance policy,25.00,Insurance
+medical insurance renewal,25.00,Insurance
+property insurance payment,25.00,Insurance
+vehicle insurance premium,25.00,Insurance
+annual insurance coverage,25.00,Insurance
+software subscription,25.00,Subscriptions
+cloud storage subscription,25.00,Subscriptions
+monthly newspaper subscription,25.00,Subscriptions
+productivity app subscription,25.00,Subscriptions
+antivirus subscription renewal,25.00,Subscriptions
+magazine subscription,25.00,Subscriptions
+email service subscription,25.00,Subscriptions
+design software license,25.00,Subscriptions
+monthly membership renewal,25.00,Subscriptions
+subscription service fee,25.00,Subscriptions
+airline flight ticket,25.00,Travel
+hotel room booking,25.00,Travel
+vacation resort stay,25.00,Travel
+international flight fare,25.00,Travel
+travel tour package,25.00,Travel
+hostel accommodation,25.00,Travel
+airport baggage fee,25.00,Travel
+holiday cruise booking,25.00,Travel
+passport visa fee,25.00,Travel
+guesthouse overnight stay,25.00,Travel
+charity donation,25.00,Other
+cash withdrawal,25.00,Other
+miscellaneous expense,25.00,Other
+unidentified transaction,25.00,Other
+gift for family,25.00,Other
+pet grooming,25.00,Other
+veterinary visit,25.00,Other
+bank service charge,25.00,Other
+transaction processing fee,25.00,Other
+unknown merchant charge,25.00,Other

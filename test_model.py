@@ -35,7 +35,15 @@ test_data = [
     ("Fresh vegetables", "Groceries"),
     ("Rice and cooking oil", "Groceries"),
     ("Milk and eggs", "Groceries"),
-    ("Supermarket shopping", "Groceries")
+    ("Supermarket shopping", "Groceries"),
+    ("Apartment rent payment", "Housing"),
+    ("Electricity utility bill", "Utilities"),
+    ("Doctor clinic consultation", "Healthcare"),
+    ("University course tuition", "Education"),
+    ("Car insurance premium", "Insurance"),
+    ("Cloud software subscription", "Subscriptions"),
+    ("Hotel accommodation booking", "Travel"),
+    ("Charity donation payment", "Other")
 ]
 
 df = pd.DataFrame(

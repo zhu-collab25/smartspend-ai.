@@ -1,352 +1,144 @@
-
-import streamlit as st
+from hashlib import sha256
+from io import BytesIO, StringIO
 import pandas as pd
-from pathlib import Path
+import streamlit as st
 from joblib import load
+from storage import ROOT, CATEGORIES, connect, validate
 
-# ---------------------------------
-# 1. PAGE SETUP
-# ---------------------------------
-
-st.set_page_config(
-    page_title="SmartSpend AI",
-    page_icon="💰",
-    layout="wide"
-)
-
-st.title("💰 SmartSpend AI")
-st.caption("Your Intelligent Personal Budgeting Assistant")
-
-st.markdown(
-    "Understand your spending, manage your budget, "
-    "and work towards your savings goals."
-)
-
-# ---------------------------------
-# 2. LOAD AI MODEL
-# ---------------------------------
-
-model_path = Path(__file__).resolve().parent / "classifier.joblib"
+st.set_page_config(page_title='SmartSpend AI', page_icon='💰', layout='wide')
+st.title('💰 SmartSpend AI')
+st.caption('Personal expense analysis and budgeting')
+st.sidebar.title('Financial settings')
+income = st.sidebar.number_input('Monthly income ($)', min_value=0.0, value=600.0)
+budget = st.sidebar.number_input('Monthly spending budget ($)', min_value=0.0, value=500.0)
+goal = st.sidebar.number_input('Monthly savings goal ($)', min_value=0.0, value=100.0)
+st.sidebar.caption('Saved data is stored locally in smartspend.db. This is a single-user app: anyone accessing this app can open saved datasets.')
 
 @st.cache_resource
-def load_model():
-    return load(model_path)
+def classifier(modified):
+    return load(ROOT / 'classifier.joblib')
 
-model = load_model()
+st.header('Upload or open transactions')
+st.write('CSV columns: Description, Amount, and optionally Date (YYYY-MM-DD). Use positive expense amounts in USD.')
+try:
+    with connect() as db:
+        names = [r[0] for r in db.execute('SELECT name FROM snapshots ORDER BY name')]
+except Exception:
+    names = []
+    st.warning('Local storage is unavailable. CSV uploads and downloads still work.')
+selected = st.selectbox('Saved datasets', ['Select a dataset'] + names)
+if st.button('Open saved dataset', disabled=selected not in names):
+    try:
+        with connect() as db:
+            data = db.execute('SELECT data FROM snapshots WHERE name=?', (selected,)).fetchone()[0]
+        st.session_state.transactions = validate(pd.read_json(StringIO(data)))
+        st.session_state.dataset_name = selected
+        st.session_state.revision = st.session_state.get('revision', 0) + 1
+    except Exception as exc:
+        st.error(f'Could not open dataset: {exc}')
 
-categories = [
-    "Food & Drinks",
-    "Transportation",
-    "Shopping",
-    "Entertainment",
-    "Groceries"
-]
+uploaded = st.file_uploader('Expense CSV', type=['csv'])
+if uploaded is not None:
+    signature = sha256(uploaded.getvalue()).hexdigest()
+    if signature != st.session_state.get('signature'):
+        try:
+            frame = validate(pd.read_csv(BytesIO(uploaded.getvalue())))
+            if 'Category' not in frame:
+                frame['Category'] = 'Other'
+                nonblank = frame['Description'].ne('')
+                if nonblank.any():
+                    try:
+                        path = ROOT / 'classifier.joblib'
+                        model = classifier(path.stat().st_mtime_ns)
+                        probabilities = model.predict_proba(frame.loc[nonblank, 'Description'])
+                        labels = model.classes_[probabilities.argmax(axis=1)].copy()
+                        labels[probabilities.max(axis=1) < 0.30] = 'Other'
+                        frame.loc[nonblank, 'Category'] = labels
+                    except Exception:
+                        st.warning('Classifier unavailable. Run python train_model.py to rebuild it; you can assign categories manually below.')
+            st.session_state.transactions = frame
+            st.session_state.dataset_name = uploaded.name
+            st.session_state.signature = signature
+            st.session_state.revision = st.session_state.get('revision', 0) + 1
+        except Exception as exc:
+            st.error(f'Could not import CSV: {exc}')
+            st.stop()
+if 'transactions' not in st.session_state:
+    st.info('Upload a CSV or open a saved dataset to begin.')
+    st.stop()
 
-# ---------------------------------
-# 3. SIDEBAR
-# ---------------------------------
-
-st.sidebar.title("⚙️ Financial Settings")
-
-income = st.sidebar.number_input(
-    "Monthly Income ($)",
-    min_value=0.0,
-    value=600.0,
-    step=50.0
-)
-
-budget = st.sidebar.number_input(
-    "Monthly Spending Budget ($)",
-    min_value=0.0,
-    value=500.0,
-    step=50.0
-)
-
-savings_goal = st.sidebar.number_input(
-    "Monthly Savings Goal ($)",
-    min_value=0.0,
-    value=100.0,
-    step=25.0
-)
-
-st.sidebar.divider()
-
-st.sidebar.info(
-    "SmartSpend uses machine learning to "
-    "predict expense categories."
-)
-
-# ---------------------------------
-# 4. UPLOAD TRANSACTIONS
-# ---------------------------------
-
-st.header("📁 Upload Your Transactions")
-
-uploaded_file = st.file_uploader(
-    "Upload a CSV file with Description and Amount columns",
-    type=["csv"]
-)
-
-if uploaded_file is not None:
-
-    df = pd.read_csv(uploaded_file)
-
-    required = {"Description", "Amount"}
-
-    if not required.issubset(df.columns):
-        st.error(
-            "Your CSV must contain Description and Amount columns."
-        )
-        st.stop()
-
-    df["Description"] = df["Description"].fillna("").astype(str)
-
-    df["Amount"] = pd.to_numeric(
-        df["Amount"],
-        errors="coerce"
-    )
-
-    if df["Amount"].isna().any():
-        st.error("Some transaction amounts are invalid.")
-        st.stop()
-
-    if (df["Amount"] < 0).any():
-        st.error(
-            "Please use positive amounts for expenses."
-        )
-        st.stop()
-
-    if df.empty:
-        st.warning("Your CSV file contains no transactions.")
-        st.stop()
-
-    # ---------------------------------
-    # 5. AI PREDICTIONS
-    # ---------------------------------
-
-    # Keep user corrections when Streamlit reruns
-    file_signature = (
-        uploaded_file.name,
-        uploaded_file.size,
-        uploaded_file.getvalue()
-    )
-
-    if st.session_state.get("file_signature") != file_signature:
-
-        df["Category"] = model.predict(
-            df["Description"]
-        )
-
-        st.session_state["transactions"] = df.copy()
-        st.session_state["file_signature"] = file_signature
-
-    st.success("AI has categorized your transactions!")
-
-    st.subheader("🤖 Review AI Predictions")
-
-    st.write(
-        "The AI predicts each category. "
-        "You can correct any mistakes in the table."
-    )
-
-    edited_df = st.data_editor(
-        st.session_state["transactions"],
-        column_config={
-            "Category": st.column_config.SelectboxColumn(
-                "Category",
-                options=categories,
-                required=True
-            ),
-            "Amount": st.column_config.NumberColumn(
-                "Amount ($)",
-                min_value=0,
-                format="$%.2f"
-            )
-        },
-        disabled=["Description", "Amount"],
-        hide_index=True,
-        use_container_width=True,
-        key="transaction_editor"
-    )
-
-    # Use corrected categories in analysis
-    df = edited_df.copy()
-
-    # ---------------------------------
-    # 6. FINANCIAL DASHBOARD
-    # ---------------------------------
-
-    st.divider()
-    st.header("📊 Your Financial Dashboard")
-
-    total = df["Amount"].sum()
-    remaining = income - total
-    budget_remaining = budget - total
-
-    col1, col2, col3 = st.columns(3)
-
-    col1.metric("Monthly Income", f"${income:,.2f}")
-    col2.metric("Total Expenses", f"${total:,.2f}")
-    col3.metric("Money Remaining", f"${remaining:,.2f}")
-
-    st.subheader("Monthly Budget")
-
-    if budget > 0:
-        budget_ratio = total / budget
-
-        st.progress(min(budget_ratio, 1.0))
-
-        st.write(
-            f"You have used {budget_ratio:.1%} "
-            f"of your monthly spending budget."
-        )
-
-        if total > budget:
-            st.error(
-                f"You are over budget by "
-                f"${abs(budget_remaining):,.2f}."
-            )
-        else:
-            st.success(
-                f"You have ${budget_remaining:,.2f} "
-                f"left in your spending budget."
-            )
+st.subheader('Review categories')
+if st.session_state.pop('saved_notice', False):
+    st.success('Saved. Run python train_model.py to incorporate reviewed corrections into the classifier.')
+st.caption('Low confidence predictions and blank descriptions use Other. Review categories before saving.')
+original = st.session_state.transactions
+edited = st.data_editor(original, hide_index=True, width='stretch',
+    disabled=[c for c in original.columns if c != 'Category'],
+    column_config={'Category': st.column_config.SelectboxColumn(options=CATEGORIES, required=True)},
+    key=f"editor_{st.session_state.get('revision', 0)}")
+name = st.text_input('Save dataset as', value=st.session_state.get('dataset_name', 'My expenses'))
+st.caption('Saving replaces the dataset with this name. Changed categories are recorded as reviewed training examples.')
+if st.button('Save transactions and corrections'):
+    if not name.strip():
+        st.error('Enter a dataset name.')
     else:
-        st.info("Set a monthly budget to track spending.")
+        changed = edited['Category'].ne(original['Category']) & edited['Description'].ne('')
+        corrections = list(edited.loc[changed, ['Description', 'Category']].itertuples(index=False, name=None))
+        try:
+            with connect() as db:
+                db.execute('INSERT OR REPLACE INTO snapshots VALUES (?, ?)', (name.strip(), edited.to_json(orient='records', date_format='iso')))
+                db.executemany('INSERT OR REPLACE INTO corrections VALUES (?, ?)', corrections)
+            st.session_state.transactions = edited.copy()
+            st.session_state.dataset_name = name.strip()
+            st.session_state.revision = st.session_state.get('revision', 0) + 1
+            st.session_state.saved_notice = True
+            st.rerun()
+        except Exception as exc:
+            st.error(f'Could not save: {exc}')
 
-    # ---------------------------------
-    # 7. SPENDING ANALYSIS
-    # ---------------------------------
-
-    st.divider()
-    st.header("📈 Spending Analysis")
-
-    spending = (
-        df.groupby("Category")["Amount"]
-        .sum()
-        .sort_values(ascending=False)
-    )
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.subheader("Spending by Category")
-        st.bar_chart(spending)
-
-    with col2:
-        st.subheader("Spending Breakdown")
-        st.dataframe(
-            spending.rename("Total ($)"),
-            use_container_width=True
-        )
-
-    # ---------------------------------
-    # 8. SAVINGS RECOMMENDATIONS
-    # ---------------------------------
-
-    st.divider()
-    st.header("💡 Smart Budgeting Insights")
-
-    if total > 0:
-
-        largest_category = spending.idxmax()
-        largest_amount = spending.max()
-
-        st.write(
-            f"Your largest spending category is "
-            f"**{largest_category}**, accounting for "
-            f"${largest_amount:,.2f}."
-        )
-
-        percentage = largest_amount / total * 100
-
-        st.write(
-            f"This represents {percentage:.1f}% "
-            f"of your total spending."
-        )
-
-        reduction = st.slider(
-            "Explore a spending reduction (%)",
-            min_value=5,
-            max_value=30,
-            value=10,
-            step=5
-        )
-
-        potential_savings = (
-            largest_amount * reduction / 100
-        )
-
-        st.info(
-            f"Reducing spending in {largest_category} "
-            f"by {reduction}% could save "
-            f"${potential_savings:,.2f}."
-        )
-
-    else:
-        st.info("Add expenses to see budgeting insights.")
-
-    # ---------------------------------
-    # 9. SAVINGS GOAL TRACKER
-    # ---------------------------------
-
-    st.divider()
-    st.header("🎯 Monthly Savings Goal")
-
-    available_savings = max(0.0, remaining)
-
-    if savings_goal > 0:
-
-        goal_progress = min(
-            available_savings / savings_goal,
-            1.0
-        )
-
-        st.progress(goal_progress)
-
-        st.write(
-            f"Potential money available for savings: "
-            f"**${available_savings:,.2f}**"
-        )
-
-        if available_savings >= savings_goal:
-            st.success(
-                "You have enough remaining income "
-                "to meet your savings goal!"
-            )
-        else:
-            shortfall = savings_goal - available_savings
-
-            st.warning(
-                f"You are ${shortfall:,.2f} "
-                f"short of your savings goal."
-            )
-
-    else:
-        st.info("Enter a savings goal in the sidebar.")
-
-    # ---------------------------------
-    # 10. DOWNLOAD RESULTS
-    # ---------------------------------
-
-    st.divider()
-    st.header("📥 Download Your Results")
-
-    csv_data = df.to_csv(index=False).encode("utf-8")
-
-    st.download_button(
-        "Download Categorized Transactions",
-        data=csv_data,
-        file_name="smartspend_results.csv",
-        mime="text/csv"
-    )
-
-    st.caption(
-        "Budgeting suggestions are educational estimates. "
-        "AI predictions may contain errors."
-    )
-
+df = edited.copy()
+if 'Date' in df:
+    month = st.selectbox('Month to analyze', sorted(df['Date'].str[:7].unique(), reverse=True))
+    df = df[df['Date'].str.startswith(month)]
 else:
-    st.info(
-        "Upload your expense CSV to start using SmartSpend AI."
-    )
+    st.warning('No Date column: all rows are treated as one month. Upload one month of expenses for meaningful comparisons.')
+st.header('Financial dashboard')
+total = df['Amount'].sum()
+remaining = income - total
+a, b, c = st.columns(3)
+a.metric('Monthly income', f'${income:,.2f}')
+b.metric('Listed expenses', f'${total:,.2f}')
+c.metric('Income less listed expenses', f'${remaining:,.2f}')
+if budget:
+    st.progress(min(total / budget, 1.0))
+    st.write(f'Budget used: {total / budget:.1%}')
+    if total > budget:
+        st.error(f'Over budget by ${total - budget:,.2f}.')
+    else:
+        st.success(f'Budget remaining: ${budget - total:,.2f}.')
+else:
+    st.info('Set a spending budget to track progress.')
+spending = df.groupby('Category')['Amount'].sum().sort_values(ascending=False)
+st.subheader('Spending by category')
+st.bar_chart(spending)
+st.dataframe(spending.rename('Total ($)'), width='stretch')
+if total > 0:
+    category, amount = spending.idxmax(), spending.max()
+    st.write(f'Largest category: **{category}**, ${amount:,.2f} ({amount / total:.1%} of expenses).')
+    reduction = st.slider('Explore a reduction in this category (%)', 5, 30, 10, 5)
+    st.info(f'A {reduction}% reduction could leave an additional ${amount * reduction / 100:,.2f}.')
+st.subheader('Savings goal estimate')
+reserve = st.number_input('Other expected expenses / money to set aside ($)', min_value=0.0, value=0.0)
+available = max(0.0, remaining - reserve)
+st.caption('Assumes income and expenses cover the selected month. This is an estimate, not a bank balance or confirmed savings.')
+st.write(f'Estimated amount available after the reserve: **${available:,.2f}**')
+if goal:
+    st.progress(min(available / goal, 1.0))
+    if available >= goal:
+        st.success('Your estimated surplus covers the savings goal.')
+    else:
+        st.warning(f'Estimated savings shortfall: ${goal - available:,.2f}.')
+else:
+    st.info('Set a savings goal to track progress.')
+st.download_button('Download all categorized transactions', edited.to_csv(index=False).encode('utf-8'), 'smartspend_results.csv', 'text/csv')
+st.caption('Predictions can be wrong. Budgeting suggestions are educational estimates.')

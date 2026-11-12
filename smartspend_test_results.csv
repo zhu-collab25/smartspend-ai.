@@ -19,3 +19,11 @@ Fresh vegetables,Groceries,Groceries,True
 Rice and cooking oil,Groceries,Groceries,True
 Milk and eggs,Groceries,Groceries,True
 Supermarket shopping,Groceries,Groceries,True
+Apartment rent payment,Housing,Housing,True
+Electricity utility bill,Utilities,Utilities,True
+Doctor clinic consultation,Healthcare,Healthcare,True
+University course tuition,Education,Education,True
+Car insurance premium,Insurance,Insurance,True
+Cloud software subscription,Subscriptions,Subscriptions,True
+Hotel accommodation booking,Travel,Travel,True
+Charity donation payment,Other,Other,True
