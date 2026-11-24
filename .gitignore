@@ -1,4 +1,6 @@
 .venv/
+.venv-chakkhu/
+.cache/
 __pycache__/
 smartspend.db
 smartspend.db-*

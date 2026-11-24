@@ -6,9 +6,13 @@ income, budget, savings goal, and expected expenses reserve.
 
 ## Run on Windows
 
+Python 3.11+ is required. The one-time model setup downloads about 39 MB of
+Chakkhu weights and the pinned local reader/line finder:
+
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python -m pip install -r requirements.txt
+.\.venv\Scripts\python tools\try_chakkhu.py --download --page
 .\.venv\Scripts\python -m streamlit run app.py
 ```
 
@@ -48,7 +52,7 @@ are not implemented.
 ## AI Receipt Scanner
 
 The scanner extends this same Streamlit app and SQLite dataset workflow. Enable
-**Scan a receipt**, upload a JPG/JPEG/PNG image, check the preview, and click
+**Scan a receipt**, choose an **OCR engine**, upload a JPG/JPEG/PNG image, check the preview, and click
 **Scan Receipt**. Review or correct merchant, date, total, currency, category,
 description, and the **Purchased items** table. Choose a dataset name, then click
 **Save Expense**. No expense is
@@ -59,15 +63,23 @@ keep the session open until saving or canceling.
 
 ### Installation
 
-Python 3.10+ is required. Install the existing requirements, which now explicitly
-include Pillow for image validation and preprocessing:
+Python 3.11+ is required. Install the requirements and download the pinned model
+once. **Chakkhu (Khmer + English)** is the default scanner engine. It runs on the
+CPU using ONNX Runtime, without a Hugging Face account, GPU, or paid API:
 
 ```powershell
 .\.venv\Scripts\python -m pip install -r requirements.txt
+.\.venv\Scripts\python tools\try_chakkhu.py --download --page
+```
+
+**Tesseract (English)** remains available in the engine selector. To use it,
+install Tesseract with its English (`eng`) language data:
+
+```powershell
 winget install --id UB-Mannheim.TesseractOCR --exact
 ```
 
-Install Tesseract with its English (`eng`) language data. See the
+See the
 [Tesseract installation guide](https://tesseract-ocr.github.io/tessdoc/Installation.html)
 for other platforms or the Windows installer. On Debian/Ubuntu, the equivalent
 system packages are `tesseract-ocr` and `tesseract-ocr-eng`.
@@ -79,16 +91,21 @@ $env:TESSERACT_CMD = 'C:\Program Files\Tesseract-OCR\tesseract.exe'
 .\.venv\Scripts\python -m streamlit run app.py
 ```
 
-If Tesseract or its language data is missing, the scanner explains the problem
-and leaves the manual review form available. No paid API or additional ML model
-is used.
+If an engine or its model files are unavailable, the scanner explains the
+problem and leaves manual review available. Choose the other engine to retry.
+Chakkhu downloads only happen through the explicit setup command; scans work
+offline. Chakkhu by Ing Muyleang is licensed under Apache-2.0; see its
+[model card](https://huggingface.co/muyleanging/Chakkhu-OCR-Khmer-ONNX).
 
 ### Recognition and saving
 
 Images are limited to 10 MB and 20 million decoded pixels; extensions and decoded
-JPEG/PNG contents are checked. Pillow corrects orientation, converts to grayscale,
-and adjusts contrast. Tesseract reads the image through stdin and returns English
-text through stdout, with a 45-second timeout. No receipt image or full OCR text
+JPEG/PNG contents are checked. Pillow corrects orientation. Chakkhu finds local
+text regions, recognizes Khmer/English lines, and joins label/price regions by
+their positions for parsing. It caches the reader between scans, limits receipts
+to 200 regions, and checks a 45-second processing budget between inference batches.
+Tesseract applies grayscale/contrast preprocessing, reads through stdin, and
+returns English text through stdout with a 45-second timeout. No receipt image or full OCR text
 is written to disk, sent to a service, or logged by the scanner. The recognized
 text can be inspected in the session before saving.
 
@@ -97,10 +114,12 @@ and change. Missing or ambiguous fields stay empty for review, including ambiguo
 numeric dates such as `11/12/2026`. Common ISO, numeric, and English month-name
 dates are supported. USD (`$`, `US$`, `USD`) and KHR (`KHR`, `riel`, `៛`) indicators
 are recognized. Conflicting totals require manual confirmation. Clear, upright,
-English printed receipts work best. Handwriting, poor photos, unusual layouts,
-automatic allocation of tax/discounts to items, and Khmer OCR are outside this version. The OCR
-service accepts a language parameter for future language support; the UI uses
-English only.
+printed receipts work best. Khmer digits, common Khmer total/payment labels,
+and currency-adjacent space-grouped amounts such as `៦០ ៩៩០៛` are normalized
+before parsing. Khmer merchant and item names remain editable and are saved as
+Unicode. Chakkhu's automatic regions can omit leading price digits, so verify
+the total and every item against the preview. Handwriting, poor photos, unusual
+layouts, and automatic allocation of tax/discounts to items remain unsupported.
 
 The existing TF-IDF/Naive Bayes classifier in `classifier.joblib` suggests one of
 the existing categories from merchant/item words, excluding totals and payment
@@ -108,8 +127,10 @@ metadata that can confuse this transaction-description model. Predictions below 
 threshold use Other. This is a trained AI prediction, not a keyword rule, and
 can be corrected. Classification failure leaves a manual category selector.
 Corrected labels use the existing `corrections` table and retraining workflow.
+This category model is trained on English descriptions; confirm categories on
+Khmer receipts, which may default to Other.
 
-Purchased items are extracted from common English receipt rows such as
+Purchased items are extracted from common receipt rows such as
 `Bread 2.00`, `Coffee 2 x 3.00 6.00`, and tables with item, quantity, unit-price,
 and amount headers. Wrapped names and prices on the following line are supported.
 Tax, subtotal, payment, change, and discount rows are excluded from products.
@@ -156,7 +177,7 @@ There is still no login: the existing single-user/local access model applies.
 ### Verify the feature
 
 ```powershell
-.\.venv\Scripts\python -m unittest test_app test_receipt test_receipt_items -v
+.\.venv\Scripts\python -m unittest test_app test_receipt test_receipt_items test_chakkhu -v
 .\.venv\Scripts\python test_model.py
 ```
 
@@ -175,3 +196,67 @@ the category editor, its month and currency in the dashboard, and reopen the sav
 dataset. Scan the same receipt again to check the duplicate warning. Try a blank
 or damaged image to confirm the error and manual-entry path. Reset should discard
 the review without changing saved transactions.
+
+## Experimental Chakkhu Khmer OCR trial
+
+To test your own receipts in a browser, install the optional requirements below,
+then launch the upload playground:
+
+```powershell
+.\.venv-chakkhu\Scripts\python -m streamlit run chakkhu_playground.py --server.address 127.0.0.1 --server.port 8502 --browser.gatherUsageStats false
+```
+
+Open **http://localhost:8502**, choose a JPG or PNG, and click **Run Chakkhu OCR**.
+The page shows recognized Khmer/English text, scan time, detected boxes, and each
+region's crop and score. Use **Crop image before scanning** with **Single text
+line** to test recognition on a particular price or line. **Example receipt**
+uses the public sample. Changing the image or scan options hides the previous
+result until scanning again. Inputs/results stay in session memory; downloads
+are explicit. This playground does not save expenses to the dashboard.
+
+The optional CLI in `tools/try_chakkhu.py` runs
+[Chakkhu by Ing Muyleang](https://huggingface.co/muyleanging/Chakkhu-OCR-Khmer-ONNX)
+locally on the CPU. The finance app uses these same pinned model assets through
+its integrated Chakkhu scanner. The trial needs Python 3.11+ and was tested with
+Python 3.12 on Windows.
+
+Use a separate environment so the experiment does not alter the app dependencies:
+
+```powershell
+python -m venv .venv-chakkhu
+.\.venv-chakkhu\Scripts\python -m pip install -r requirements-chakkhu.txt
+.\.venv-chakkhu\Scripts\python tools\try_chakkhu.py --download --demo --output .cache\chakkhu\demo-result.json
+```
+
+The first demo run downloads the INT8 model weights (about 39 MB), its reader,
+and the author's public line finder and example receipt. Upstream revisions and
+SHA-256 checksums are pinned in the script. Later runs work offline without
+`--download`. Model files, the demo image, and the separate environment are
+ignored by Git. No Hugging Face account, paid API, or GPU is needed.
+
+Chakkhu recognizes **one text line at a time**. Try a cropped line, or use the
+experimental page detector on a full receipt:
+
+```powershell
+.\.venv-chakkhu\Scripts\python tools\try_chakkhu.py 'C:\path\to\line.png'
+.\.venv-chakkhu\Scripts\python tools\try_chakkhu.py 'C:\path\to\receipt.jpg' --page --download
+```
+
+For example, read only the final amount in the downloaded demo:
+
+```powershell
+.\.venv-chakkhu\Scripts\python tools\try_chakkhu.py --demo --crop 603 806 732 851
+```
+
+Default decoding uses beam search plus CTC (`--beam 4`); `--beam 0` uses the faster
+CTC-only draft. JSON output includes text, word-independent line boxes, heuristic
+confidence scores, and timings. Terminal output uses Unicode escapes for Windows
+compatibility; `--output` saves readable UTF-8 JSON. Local input images are never
+uploaded, and extracted text is only saved when `--output` is supplied.
+
+The page detector can omit leading price digits and split item names from prices.
+Confidence scores are not calibrated probabilities. Successful line recognition
+does not establish receipt accuracy. The integrated scanner assembles regions
+and normalizes common Khmer labels/digits/grouped prices before parsing. Further
+line detection and column matching improvements remain future work; review all
+extracted fields and items before saving an expense.

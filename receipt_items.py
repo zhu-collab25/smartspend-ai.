@@ -3,6 +3,7 @@ from decimal import Decimal, InvalidOperation
 import json
 import math
 import re
+from receipt_text import has_letters, normalize_receipt_text
 
 ITEM_COLUMNS = ['Item', 'Quantity', 'Unit Price', 'Line Total']
 NUMBER = r'(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,3})?'
@@ -155,6 +156,7 @@ def _parse_row(line, layout):
 
 def parse_items(text, merchant='', currency=None):
     """Recognize common printed rows without treating receipt summaries as products."""
+    text = normalize_receipt_text(text)
     items, pending = [], []
     layout = None
     active = False
@@ -176,14 +178,14 @@ def parse_items(text, merchant='', currency=None):
             break  # Do not parse payment/footer amounts as purchased items.
         if (line.casefold() == merchant.casefold() or DATE.search(line)
                 or re.search(r'\b(?:street|road|avenue|blvd|postal|zip)\b', line, re.I)
-                or not re.search(r'[A-Za-z0-9]', line)):
+                or not any(character.isalnum() for character in line)):
             pending = []
             continue
         row = _parse_row(line, layout)
         if row is not None:
             if pending and (active or not row['Item']):
                 row['Item'] = ' '.join(pending + [row['Item']]).strip()
-            if not re.search(r'[A-Za-z]{2}', row['Item']):
+            if not has_letters(row['Item']):
                 pending = []
                 continue
             row['Item'] = row['Item'][:300]
@@ -199,7 +201,7 @@ def parse_items(text, merchant='', currency=None):
                 if row['Item']:
                     items.extend(validate_items([row]))
             pending, active = [], True
-        elif re.search(r'[A-Za-z]{2}', line) and (active or not re.search(r'\d', line)):
+        elif has_letters(line) and (active or not re.search(r'\d', line)):
             pending = (pending + [line])[-2:]
         else:
             pending = []

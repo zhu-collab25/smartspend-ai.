@@ -1,0 +1,6 @@
+# Optional, isolated OCR experiment; the Streamlit app does not require these.
+onnxruntime==1.32.0
+numpy==2.5.5
+Pillow==13.0.0
+opencv-python-headless==5.1.0.95
+streamlit==1.67.0

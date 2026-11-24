@@ -333,6 +333,7 @@ class StorageAndUITests(unittest.TestCase):
             at = self.app()
             at.session_state['scan_receipt_open'] = True
             at.run()
+            self.find(at.selectbox, 'OCR engine').select('Tesseract (English)').run()
             self.find(at.button, 'Scan Receipt').click().run()
             self.assertFalse(at.exception)
             ocr.assert_called_once()
@@ -360,6 +361,7 @@ class StorageAndUITests(unittest.TestCase):
             at = self.app()
             at.session_state['scan_receipt_open'] = True
             at.run()
+            self.find(at.selectbox, 'OCR engine').select('Tesseract (English)').run()
             self.find(at.button, 'Scan Receipt').click().run()
             self.assertFalse(at.exception)
             self.assertTrue(any('No readable text' in item.value for item in at.warning))

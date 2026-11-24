@@ -15,6 +15,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 
 from storage import CATEGORIES
 from receipt_items import dump_items, parse_items
+from receipt_text import has_letters, normalize_receipt_text
 
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024
 MAX_PIXELS = 20_000_000
@@ -104,6 +105,7 @@ def currencies(text):
 
 def parse_date(text):
     """Return a date only when every recognized interpretation agrees."""
+    text = normalize_receipt_text(text)
     found = set()
     ambiguous = False
     for match in re.finditer(r'\b(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})\b', text):
@@ -143,10 +145,11 @@ EXCLUDED = re.compile(r'\b(sub\s*total|subtotal|tax|vat|discount|savings?|change
 
 
 def parse_receipt(text):
+    text = normalize_receipt_text(text)
     lines = [re.sub(r'\s+', ' ', line).strip() for line in text.splitlines() if line.strip()]
     receipt = Receipt(date=parse_date(text))
     for line in lines[:8]:
-        if (re.search(r'[A-Za-z]{2}', line) and not re.search(r'\d', line)
+        if (has_letters(line) and not re.search(r'\d', line)
                 and not re.search(r'\b(receipt|invoice|welcome|thank|date|time|tel|phone|cashier|address|www)\b', line, re.I)
                 and not TOTAL.search(line) and not EXCLUDED.search(line)):
             receipt.merchant = line[:200]

@@ -9,6 +9,7 @@ from receipt import (Receipt, ReceiptError, categorization_text, decode_image, e
                      parse_receipt, recognize_text, suggest_category)
 from storage import CATEGORIES, DuplicateReceiptError, ROOT, save_receipt
 from receipt_items import ITEM_COLUMNS, item_warnings, load_items, validate_items
+from chakkhu_ocr import ChakkhuError, recognize_receipt
 
 
 def _clear():
@@ -20,9 +21,10 @@ def _clear():
 
 def render_scanner(classifier, frame=None):
     st.subheader('AI Receipt Scanner')
-    st.caption('JPG, JPEG, or PNG · up to 10 MB · English printed receipts. '
+    st.caption('JPG, JPEG, or PNG · up to 10 MB · Khmer and English printed receipts. '
                'Images stay in memory. Review every field before saving.')
     generation = st.session_state.get('receipt_generation', 0)
+    engine = st.selectbox('OCR engine', ['Chakkhu (Khmer + English)', 'Tesseract (English)'], key='receipt_engine')
     uploaded = st.file_uploader('Receipt image', type=['jpg', 'jpeg', 'png'],
                                 key=f'receipt_upload_{generation}', max_upload_size=10)
     image = None
@@ -31,7 +33,7 @@ def render_scanner(classifier, frame=None):
             data = uploaded.getvalue()
             signature = sha256(data).hexdigest()
             if signature != st.session_state.get('receipt_signature'):
-                for key in ('receipt_result', 'receipt_text', 'receipt_token'):
+                for key in ('receipt_result', 'receipt_text', 'receipt_token', 'receipt_regions', 'receipt_source_engine'):
                     st.session_state.pop(key, None)
                 st.session_state.receipt_signature = signature
                 st.session_state.receipt_review_revision = st.session_state.get('receipt_review_revision', 0) + 1
@@ -47,20 +49,28 @@ def render_scanner(classifier, frame=None):
         _clear()
         st.rerun()
     if scan or manual:
-        st.session_state.pop('receipt_text', None)
+        for key in ('receipt_text', 'receipt_regions', 'receipt_source_engine'):
+            st.session_state.pop(key, None)
         result = Receipt()
         if scan:
             try:
                 with st.spinner('Reading receipt…'):
-                    text = recognize_text(image)
+                    if engine == 'Chakkhu (Khmer + English)':
+                        text, regions = recognize_receipt(image)
+                        st.session_state.receipt_regions = regions
+                    else:
+                        text = recognize_text(image)
                     result = parse_receipt(text)
+                    st.session_state.receipt_source_engine = engine
+                    if engine == 'Chakkhu (Khmer + English)':
+                        result.warnings.append('Check totals and item prices against the receipt preview; automatic text regions can omit digits.')
                     st.session_state.receipt_text = text
                     try:
                         path = ROOT / 'classifier.joblib'
                         result.category = suggest_category(classifier(path.stat().st_mtime_ns), categorization_text(text))
                     except Exception:
                         result.warnings.append('The trained classifier is unavailable. Choose a category manually.')
-            except ReceiptError as exc:
+            except (ReceiptError, ChakkhuError) as exc:
                 result.warnings.append(str(exc))
             except Exception:
                 result.warnings.append('This receipt could not be processed. Try another image or enter details manually.')
@@ -74,6 +84,8 @@ def render_scanner(classifier, frame=None):
     for warning in result.warnings:
         st.warning(warning)
     st.caption('Category suggestion uses the existing trained AI classifier. Low-confidence results use Other.')
+    if st.session_state.get('receipt_source_engine'):
+        st.caption(f"Scanned with {st.session_state.receipt_source_engine}. Confirm the suggested category for Khmer receipts.")
     if st.session_state.get('receipt_text'):
         with st.expander('Recognized text (review only)'):
             st.text(st.session_state.receipt_text)
